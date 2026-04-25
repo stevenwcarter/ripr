@@ -591,4 +591,10 @@ mod tests {
             }
         );
     }
+
+    #[test]
+    fn error_dollar_end_exclusive() {
+        // "$" in end position cannot be exclusive — $ is already "last line" inclusive
+        assert!(parse_ranges("5-$)").is_err());
+    }
 }
