@@ -71,7 +71,11 @@ impl Whitelist {
                 return Ok(());
             }
         }
-        Err(RipError::AccessDenied(canonical))
+        // Use the original (non-canonical) path in the error so the user sees
+        // what they typed, not the internal canonical form (e.g. no \\?\ prefix
+        // on Windows, no /private prefix on macOS). The whitelist add hint
+        // is still correct because add() canonicalizes its input.
+        Err(RipError::AccessDenied(target.to_path_buf()))
     }
 
     /// Add a path to the whitelist. Canonicalizes the input path first.
