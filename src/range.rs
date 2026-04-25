@@ -132,6 +132,8 @@ fn find_separator(s: &str) -> Option<(usize, char)> {
 
 fn parse_start_bound(s: &str, exclusive: bool, token: &str) -> Result<Bound, RipError> {
     if s == "$" {
+        // "$" in start is only valid via sed_compat::parse_sed_n for the $p (last-line) case.
+        // Native range syntax does not support "$" in start position.
         return Err(RipError::Parse(format!(
             "'$' is not valid in the start position of range {token:?}"
         )));

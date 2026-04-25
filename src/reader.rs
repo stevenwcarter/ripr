@@ -9,13 +9,14 @@ use crate::range::RangeSpec;
 // Private helpers
 // ---------------------------------------------------------------------------
 
-/// Returns `true` when we can safely stop reading — i.e., every range has a
-/// numeric (non-`LastLine`) upper bound that is already behind `line`.
+/// Returns true when we are guaranteed to have passed all matching lines and can stop reading.
+/// PRECONDITION: caller must ensure `line_count > 0` before calling this — if line_count is
+/// unknown (0), LastLine ranges cannot be resolved and short-circuit is unsafe.
 fn can_short_circuit(line: u64, ranges: &[RangeSpec]) -> bool {
     use crate::range::Bound;
     ranges.iter().all(|spec| match &spec.end {
         Bound::Inclusive(n) => *n <= line,
-        Bound::Exclusive(n) => *n <= line,
+        Bound::Exclusive(n) => n.saturating_sub(1) <= line,
         Bound::LastLine => false,
     })
 }
@@ -100,7 +101,11 @@ pub(crate) fn emit_from_buffer<W: Write>(
 /// Count the number of lines in a file without buffering content.
 pub fn count_lines(path: &Path) -> Result<u64, RipError> {
     let f = File::open(path)?;
-    let count = BufReader::new(f).lines().count() as u64;
+    let mut count = 0u64;
+    for result in BufReader::new(f).lines() {
+        result?;
+        count += 1;
+    }
     Ok(count)
 }
 
