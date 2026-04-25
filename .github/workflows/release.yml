@@ -68,7 +68,7 @@ jobs:
 
       - name: Install cross
         if: matrix.cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
+        run: cargo install cross --version 0.2.5 --locked
 
       - name: Build
         shell: bash
@@ -94,9 +94,15 @@ jobs:
             BIN="target/${TARGET}/release/ripr"
           fi
 
-          # Strip binary on native non-Windows builds
+          # Strip binary on native non-Windows builds.
+          # Cross-compiled targets are not stripped (no host-side cross-strip toolchain).
+          # macOS requires -x to strip local symbols without breaking Mach-O structure.
           if [[ "${{ matrix.cross }}" != "true" && "$TARGET" != *windows* ]]; then
-            strip "$BIN"
+            if [[ "$TARGET" == *apple* ]]; then
+              strip -x "$BIN"
+            else
+              strip "$BIN"
+            fi
           fi
 
           # Archive name
@@ -105,7 +111,7 @@ jobs:
           if [[ "$EXT" == "zip" ]]; then
             7z a "$ARCHIVE" "$BIN"
           else
-            tar -czf "$ARCHIVE" -C "$(dirname $BIN)" "$(basename $BIN)"
+            tar -czf "$ARCHIVE" -C "$(dirname "$BIN")" "$(basename "$BIN")"
           fi
 
           # SHA256
