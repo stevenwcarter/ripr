@@ -1,3 +1,4 @@
+// Scaffolding phase: remove once all module stubs are replaced with real implementations.
 #![allow(dead_code, unused_imports, unused_variables)]
 
 pub mod cli;
