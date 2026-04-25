@@ -87,22 +87,17 @@ fn parse_sed_expr(expr: &str) -> Result<RangeSpec, RipError> {
             Bound::LastLine
         } else {
             let end_n = parse_sed_line_number(rhs, expr)?;
+            if start_n > end_n {
+                return Err(RipError::Parse(format!(
+                    "end line {end_n} is before start line {start_n} in sed expression '{expr}'"
+                )));
+            }
             Bound::Inclusive(end_n)
         };
 
         Ok(RangeSpec { start, end })
     } else {
         // Single address: N
-        if addr == "$" {
-            // Already handled above, but be safe.
-            return Ok(RangeSpec {
-                start: Bound::LastLine,
-                end: Bound::LastLine,
-            });
-        }
-
-        // Reject anything that looks like a non-numeric, non-$ address
-        // (e.g. letters other than what would be caught by parse_sed_line_number).
         let n = parse_sed_line_number(addr, expr)?;
         Ok(RangeSpec {
             start: Bound::Inclusive(n),
@@ -113,7 +108,7 @@ fn parse_sed_expr(expr: &str) -> Result<RangeSpec, RipError> {
 
 fn parse_sed_line_number(s: &str, expr: &str) -> Result<u64, RipError> {
     // If it's not purely digits, reject as unsupported.
-    if !s.chars().all(|c| c.is_ascii_digit()) || s.is_empty() {
+    if s.is_empty() || !s.chars().all(|c| c.is_ascii_digit()) {
         return Err(RipError::Parse(format!(
             "unsupported sed expression '{expr}': expected a line number, got '{s}'\n\
              Use 'ripr <range> <file>' for native syntax"
@@ -294,5 +289,10 @@ mod tests {
         // trailing semicolon produces an empty part
         let err = parse_sed_n("5p;").unwrap_err();
         assert!(matches!(err, RipError::Parse(_)));
+    }
+
+    #[test]
+    fn error_end_before_start() {
+        assert!(parse_sed_n("10,5p").is_err());
     }
 }

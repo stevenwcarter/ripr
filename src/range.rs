@@ -10,7 +10,9 @@ pub enum Bound {
     Inclusive(u64),
     /// The line number IS NOT included (exclusive / open boundary).
     Exclusive(u64),
-    /// `$` — the last line of input.  Only valid in the `end` position.
+    /// `$` — the last line of input.
+    /// In the `end` position: matches lines up to and including the last line.
+    /// In the `start` position: matches only the last line (used by sed `$p`).
     LastLine,
 }
 
@@ -614,5 +616,16 @@ mod tests {
     fn error_dollar_end_exclusive() {
         // "$" in end position cannot be exclusive — $ is already "last line" inclusive
         assert!(parse_ranges("5-$)").is_err());
+    }
+
+    #[test]
+    fn contains_last_line_in_start() {
+        // LastLine..LastLine (used by $p) — matches only the last line
+        let r = RangeSpec {
+            start: Bound::LastLine,
+            end: Bound::LastLine,
+        };
+        assert!(!r.contains(9, 10));
+        assert!(r.contains(10, 10));
     }
 }
