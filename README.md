@@ -14,7 +14,7 @@ cargo install ripr
 
 ### From binary releases
 
-Download a pre-built binary for your platform from the [releases page](https://github.com/your-org/ripr/releases). Archives are `.tar.gz` on Linux and macOS, `.zip` on Windows. SHA256 checksums are provided for each archive.
+Download a pre-built binary for your platform from the [releases page](https://github.com/stevenwcarter/ripr/releases). Archives are `.tar.gz` on Linux and macOS, `.zip` on Windows. SHA256 checksums are provided for each archive.
 
 Available targets:
 

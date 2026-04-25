@@ -8,7 +8,7 @@ This guide walks through setting up `ripr` for a new project so that AI coding t
 cargo install ripr
 ```
 
-Or download a pre-built binary from the [releases page](https://github.com/your-org/ripr/releases) and place it on your `PATH`. See [README.md](../../README.md#install) for details.
+Or download a pre-built binary from the [releases page](https://github.com/stevenwcarter/ripr/releases) and place it on your `PATH`. See [README.md](../../README.md#install) for details.
 
 ## 2. Whitelist the project directory
 
