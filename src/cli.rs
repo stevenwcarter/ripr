@@ -6,26 +6,24 @@ use std::path::PathBuf;
     name = "ripr",
     version,
     about = "Read specific line ranges from files",
-    long_about = "ripr returns line ranges from files.\nIt is a safe, whitelisted alternative to `sed -n 'N,Mp'` for read-only line extraction.",
-    arg_required_else_help = true
+    long_about = None,
+    arg_required_else_help = true,
 )]
 pub struct Cli {
     /// Path to the config file (overrides RIPR_CONFIG env and default location)
     #[arg(long, global = true)]
     pub config: Option<PathBuf>,
 
+    /// sed-style expression, e.g. "5,10p" or "1,$p"
+    #[arg(short = 'n', long = "sed")]
+    pub sed: Option<String>,
+
     #[command(subcommand)]
     pub command: Option<Commands>,
 
-    /// Line range(s) to extract, e.g. "5-10", "(3,8)", "5-10;20-25"
-    pub range: Option<String>,
-
-    /// sed-style expression, e.g. "5,10p" or "1,$p"
-    #[arg(short = 'n')]
-    pub sed: Option<String>,
-
-    /// File(s) to read. Use "-" for stdin.
-    pub files: Vec<PathBuf>,
+    /// In native mode: RANGE FILE [FILE...]
+    /// In sed mode (-n EXPR): FILE [FILE...]
+    pub args: Vec<String>,
 }
 
 #[derive(Subcommand, Debug)]

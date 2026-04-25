@@ -1,5 +1,5 @@
 use std::io::{self, BufWriter};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process;
 
 use clap::Parser;
@@ -40,26 +40,42 @@ fn run(cli: Cli) -> Result<(), RipError> {
             }
         }
         None => {
-            // Determine ranges from -n (sed) or positional range arg
-            let ranges = if let Some(expr) = cli.sed {
-                sed_compat::parse_sed_n(&expr)?
-            } else if let Some(range_str) = cli.range {
-                range::parse_ranges(&range_str)?
+            // Resolve ranges and file list from cli.sed and cli.args
+            let (ranges, files): (Vec<range::RangeSpec>, Vec<PathBuf>) = if let Some(expr) = cli.sed
+            {
+                // sed mode: all args are files
+                if cli.args.is_empty() {
+                    return Err(RipError::Parse(
+                        "no files specified — usage: ripr -n '5,10p' FILE [FILE...]".to_string(),
+                    ));
+                }
+                let ranges = sed_compat::parse_sed_n(&expr)?;
+                let files = cli.args.iter().map(PathBuf::from).collect();
+                (ranges, files)
             } else {
-                return Err(RipError::Parse(
-                    "no range specified — use 'ripr RANGE FILE' or 'ripr -n EXPR FILE'".to_string(),
-                ));
+                // native mode: first arg is range, rest are files
+                if cli.args.is_empty() {
+                    return Err(RipError::Parse(
+                        "usage: ripr RANGE FILE [FILE...] or ripr -n EXPR FILE [FILE...]"
+                            .to_string(),
+                    ));
+                }
+                let range_str = &cli.args[0];
+                if cli.args.len() < 2 {
+                    return Err(RipError::Parse(format!(
+                        "no files specified — usage: ripr {range_str} FILE [FILE...]"
+                    )));
+                }
+                let ranges = range::parse_ranges(range_str)?;
+                let files = cli.args[1..].iter().map(PathBuf::from).collect();
+                (ranges, files)
             };
-
-            if cli.files.is_empty() {
-                return Err(RipError::Parse("no files specified".to_string()));
-            }
 
             let whitelist = Whitelist::load(config_path)?;
             let stdout = io::stdout();
             let mut out = BufWriter::new(stdout.lock());
 
-            for path in &cli.files {
+            for path in &files {
                 if path == Path::new("-") {
                     reader::read_stdin(&ranges, &mut out)?;
                 } else {
