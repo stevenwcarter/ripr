@@ -51,7 +51,8 @@ fn parse_one(token: &str) -> Result<RangeSpec, RipError> {
 
     // Detect close-paren on end.
     let (end_excl, rest) = if let Some(r) = rest.strip_suffix(')') {
-        // A lone ')' with nothing else is an error.
+        // `rest` here is the pre-strip value; a lone ")" token becomes rest="" after strip,
+        // but we check rest==")" before reassigning to catch this before the separator search.
         if !start_excl && rest == ")" {
             return Err(RipError::Parse(format!(
                 "lone ')' without opening '(' in {:?}",
@@ -185,7 +186,13 @@ impl RangeSpec {
         let start_ok = match &self.start {
             Bound::Inclusive(s) => line >= *s,
             Bound::Exclusive(s) => line > *s,
-            Bound::LastLine => unreachable!("LastLine is invalid in start position"),
+            Bound::LastLine => {
+                debug_assert!(
+                    false,
+                    "LastLine is invalid in start position — parser should have rejected this"
+                );
+                false
+            }
         };
         let end_ok = match &self.end {
             Bound::Inclusive(e) => line <= *e,
@@ -566,6 +573,22 @@ mod tests {
         assert_eq!(r.start, inc(5));
         assert_eq!(r.end, inc(5));
         assert!(r.contains(5, 10));
+    }
+
+    // ------------------------------------------------------------------
+    // Single-exclusive form (N) — always-empty range
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn single_exclusive_always_empty() {
+        // "(N)" produces Exclusive(N)..Exclusive(N) — a valid but always-empty range.
+        // Users who write this almost certainly made a mistake; document behavior.
+        let specs = parse_ranges("(5)").expect("parses without error");
+        assert_eq!(specs.len(), 1);
+        let s = &specs[0];
+        assert!(!s.contains(4, 100));
+        assert!(!s.contains(5, 100)); // exclusive on both sides
+        assert!(!s.contains(6, 100));
     }
 
     // ------------------------------------------------------------------
