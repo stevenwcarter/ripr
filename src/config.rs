@@ -41,19 +41,17 @@ pub fn resolve_config_path(cli_override: Option<&Path>) -> Result<PathBuf, RipEr
 
 /// Load config from disk. If the file does not exist, return an empty Config (not an error).
 pub fn load_config(path: &Path) -> Result<Config, RipError> {
-    if !path.exists() {
-        return Ok(Config::default());
+    match std::fs::read_to_string(path) {
+        Ok(contents) => toml::from_str(&contents).map_err(|e| {
+            RipError::Config(format!(
+                "failed to parse config at {}: {}",
+                path.display(),
+                e
+            ))
+        }),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Config::default()),
+        Err(e) => Err(RipError::Io(e)),
     }
-
-    let contents = std::fs::read_to_string(path)?;
-    let config: Config = toml::from_str(&contents).map_err(|e| {
-        RipError::Config(format!(
-            "failed to parse config at {}: {}",
-            path.display(),
-            e
-        ))
-    })?;
-    Ok(config)
 }
 
 /// Save config to disk. Creates the parent directory if it doesn't exist.

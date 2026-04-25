@@ -19,27 +19,26 @@ impl Whitelist {
     }
 
     /// Check if `target` is allowed. Canonicalizes `target` (resolves symlinks),
-    /// then checks if it matches any whitelisted entry:
-    /// - Directory entry: target starts with the whitelisted dir path
-    /// - File entry: target equals the whitelisted path exactly
+    /// then checks if it starts with any whitelisted entry (also canonicalized,
+    /// falling back to the raw string if the entry no longer exists on disk).
     ///
     /// Returns Err(RipError::AccessDenied(target)) if not allowed.
     pub fn check(&self, target: &Path) -> Result<(), RipError> {
-        let canonical = target
-            .canonicalize()
-            .map_err(|_| RipError::AccessDenied(target.to_path_buf()))?;
+        let canonical = match target.canonicalize() {
+            Ok(p) => p,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return Err(RipError::AccessDenied(target.to_path_buf()));
+            }
+            Err(e) => return Err(RipError::Io(e)),
+        };
+
         for entry in &self.config.paths {
-            let entry_path = Path::new(entry);
-            if entry_path.is_dir() {
-                // Directory: target must start with the whitelisted dir
-                if canonical.starts_with(entry_path) {
-                    return Ok(());
-                }
-            } else {
-                // File (or unknown): exact match
-                if canonical == entry_path {
-                    return Ok(());
-                }
+            let entry_path = Path::new(entry)
+                .canonicalize()
+                .unwrap_or_else(|_| PathBuf::from(entry));
+            // starts_with uses component boundaries so "/foo/bar" never matches "/foo/ba"
+            if canonical.starts_with(&entry_path) {
+                return Ok(());
             }
         }
         Err(RipError::AccessDenied(canonical))
@@ -47,26 +46,37 @@ impl Whitelist {
 
     /// Add a path to the whitelist. Canonicalizes the input path first.
     /// If the path is already in the whitelist, this is a no-op.
-    /// Saves the config after adding.
+    /// Saves the config after adding (staged write: disk is updated before in-memory state).
     pub fn add(&mut self, path: &Path) -> Result<(), RipError> {
         let canonical = path.canonicalize().map_err(RipError::Io)?;
         let canonical_str = canonical.to_string_lossy().into_owned();
 
         if !self.config.paths.contains(&canonical_str) {
-            self.config.paths.push(canonical_str);
-            self.config.paths.sort();
-            save_config(&self.config_path, &self.config)?;
+            let mut staged = self.config.paths.clone();
+            staged.push(canonical_str);
+            staged.sort();
+            save_config(
+                &self.config_path,
+                &Config {
+                    paths: staged.clone(),
+                },
+            )?;
+            self.config.paths = staged;
         }
 
         Ok(())
     }
 
-    /// Remove a path from the whitelist. Canonicalizes the input path first.
+    /// Remove a path from the whitelist.
+    /// Attempts canonicalization; falls back to the raw string if the path no longer exists,
+    /// so entries for deleted paths can still be removed.
     /// If the path is not in the whitelist, this is a no-op (no error).
     /// Saves the config after removing.
     pub fn remove(&mut self, path: &Path) -> Result<(), RipError> {
-        let canonical = path.canonicalize().map_err(RipError::Io)?;
-        let canonical_str = canonical.to_string_lossy().into_owned();
+        let canonical_str = path
+            .canonicalize()
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_else(|_| path.to_string_lossy().into_owned());
 
         let original_len = self.config.paths.len();
         self.config.paths.retain(|p| p != &canonical_str);
@@ -206,6 +216,28 @@ mod tests {
         // file should still be accessible
         assert!(wl.check(&file).is_ok());
         assert_eq!(wl.config.paths.len(), 1);
+    }
+
+    #[test]
+    fn remove_path_that_no_longer_exists_on_disk() {
+        // After a whitelisted directory is deleted, remove() should still work (no-op vs disk,
+        // but it removes the entry from the in-memory config and saves).
+        let dir = tempdir().unwrap();
+        let config_path = dir.path().join("config.toml");
+        let mut wl = Whitelist::load(config_path).unwrap();
+
+        // Add a real path
+        let target_dir = dir.path().join("myproject");
+        std::fs::create_dir_all(&target_dir).unwrap();
+        wl.add(&target_dir).unwrap();
+        assert_eq!(wl.list().len(), 1);
+
+        // Delete the directory from disk
+        std::fs::remove_dir_all(&target_dir).unwrap();
+
+        // remove() should succeed even though the path no longer exists
+        wl.remove(&target_dir).unwrap();
+        assert_eq!(wl.list().len(), 0);
     }
 
     #[test]
