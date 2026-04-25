@@ -3,6 +3,33 @@ use std::path::{Path, PathBuf};
 use crate::RipError;
 use crate::config::{Config, load_config, save_config};
 
+/// Canonicalize `path`, resolving symlinks. If the path no longer exists on disk,
+/// walk up to the nearest existing ancestor, canonicalize that, and re-append the
+/// missing components. This preserves the same canonical prefix that was stored
+/// when the path existed (e.g. `/private/var` on macOS, `\\?\` on Windows),
+/// so `remove()` can still match a stored entry after the path has been deleted.
+fn best_effort_canonical(path: &Path) -> String {
+    if let Ok(p) = path.canonicalize() {
+        return p.to_string_lossy().into_owned();
+    }
+    let components: Vec<_> = path.components().collect();
+    // Try progressively shorter prefixes (longest first) until one exists on disk.
+    for i in (0..components.len()).rev() {
+        let mut ancestor = PathBuf::new();
+        for c in &components[..i] {
+            ancestor.push(c);
+        }
+        if let Ok(cp) = ancestor.canonicalize() {
+            let mut suffix = PathBuf::new();
+            for c in &components[i..] {
+                suffix.push(c);
+            }
+            return cp.join(suffix).to_string_lossy().into_owned();
+        }
+    }
+    path.to_string_lossy().into_owned()
+}
+
 pub struct Whitelist {
     config_path: PathBuf,
     config: Config,
@@ -71,15 +98,11 @@ impl Whitelist {
     }
 
     /// Remove a path from the whitelist.
-    /// Attempts canonicalization; falls back to the raw string if the path no longer exists,
-    /// so entries for deleted paths can still be removed.
+    /// Uses best-effort canonicalization so entries for deleted paths can still be removed.
     /// If the path is not in the whitelist, this is a no-op (no error).
     /// Saves the config after removing.
     pub fn remove(&mut self, path: &Path) -> Result<(), RipError> {
-        let canonical_str = path
-            .canonicalize()
-            .map(|p| p.to_string_lossy().into_owned())
-            .unwrap_or_else(|_| path.to_string_lossy().into_owned());
+        let canonical_str = best_effort_canonical(path);
 
         let original_len = self.config.paths.len();
         self.config.paths.retain(|p| p != &canonical_str);
