@@ -26,11 +26,11 @@ fn run(cli: Cli) -> Result<(), RipError> {
             match args.action {
                 WhitelistAction::Add { path } => {
                     whitelist.add(&path)?;
-                    println!("Added: {}", path.display());
+                    eprintln!("Added: {}", path.display());
                 }
                 WhitelistAction::Remove { path } => {
                     whitelist.remove(&path)?;
-                    println!("Removed: {}", path.display());
+                    eprintln!("Removed: {}", path.display());
                 }
                 WhitelistAction::List => {
                     for p in whitelist.list() {
@@ -72,6 +72,14 @@ fn run(cli: Cli) -> Result<(), RipError> {
             };
 
             let whitelist = Whitelist::load(config_path)?;
+
+            // Pre-validate all non-stdin paths before emitting any output.
+            for path in &files {
+                if path != Path::new("-") {
+                    whitelist.check(path)?;
+                }
+            }
+
             let stdout = io::stdout();
             let mut out = BufWriter::new(stdout.lock());
 
@@ -79,7 +87,6 @@ fn run(cli: Cli) -> Result<(), RipError> {
                 if path == Path::new("-") {
                     reader::read_stdin(&ranges, &mut out)?;
                 } else {
-                    whitelist.check(path)?;
                     reader::read_file(path, &ranges, &mut out)?;
                 }
             }

@@ -22,12 +22,15 @@ impl Whitelist {
     /// then checks if it starts with any whitelisted entry (also canonicalized,
     /// falling back to the raw string if the entry no longer exists on disk).
     ///
-    /// Returns Err(RipError::AccessDenied(target)) if not allowed.
+    /// Returns `Ok(())` if the path is whitelisted.
+    /// Returns `Err(RipError::AccessDenied(...))` if the path exists but is not whitelisted.
+    /// Returns `Err(RipError::Io(ENOENT))` if the path does not exist.
     pub fn check(&self, target: &Path) -> Result<(), RipError> {
         let canonical = match target.canonicalize() {
             Ok(p) => p,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                return Err(RipError::AccessDenied(target.to_path_buf()));
+                // The target doesn't exist — this is an I/O error, not an access control decision.
+                return Err(RipError::Io(e));
             }
             Err(e) => return Err(RipError::Io(e)),
         };

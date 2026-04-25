@@ -15,7 +15,7 @@ pub struct Cli {
     pub config: Option<PathBuf>,
 
     /// sed-style expression, e.g. "5,10p" or "1,$p"
-    #[arg(short = 'n', long = "sed")]
+    #[arg(short = 'n', long = "sed", value_name = "EXPR")]
     pub sed: Option<String>,
 
     #[command(subcommand)]
