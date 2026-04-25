@@ -5,7 +5,7 @@ pub enum RipError {
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
 
-    #[error("access denied: {0}")]
+    #[error("access denied: {0}\n  \u{2192} to allow access, run: ripr whitelist add {0:?}")]
     AccessDenied(PathBuf),
 
     #[error("config error: {0}")]
