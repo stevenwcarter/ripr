@@ -186,13 +186,8 @@ impl RangeSpec {
         let start_ok = match &self.start {
             Bound::Inclusive(s) => line >= *s,
             Bound::Exclusive(s) => line > *s,
-            Bound::LastLine => {
-                debug_assert!(
-                    false,
-                    "LastLine is invalid in start position — parser should have rejected this"
-                );
-                false
-            }
+            // LastLine in start means "from the last line onward" — used by $p (last-line-only).
+            Bound::LastLine => line >= line_count,
         };
         let end_ok = match &self.end {
             Bound::Inclusive(e) => line <= *e,
