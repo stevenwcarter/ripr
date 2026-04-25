@@ -1,36 +1,6 @@
-use assert_cmd::Command;
+mod common;
+use common::{isolated_config, numbered_file, ripr, whitelist_add};
 use predicates::prelude::*;
-use std::io::Write;
-use tempfile::{NamedTempFile, TempDir};
-
-// Helper: create a temp file with numbered lines 1..=n
-fn numbered_file(n: u32) -> NamedTempFile {
-    let mut f = NamedTempFile::new().unwrap();
-    for i in 1..=n {
-        writeln!(f, "{i}").unwrap();
-    }
-    f
-}
-
-// Helper: create a temp dir for config isolation
-fn isolated_config() -> TempDir {
-    tempfile::tempdir().unwrap()
-}
-
-// Helper: build a ripr Command with an isolated config dir
-fn ripr(config_dir: &TempDir) -> Command {
-    let mut cmd = Command::cargo_bin("ripr").unwrap();
-    cmd.env("RIPR_CONFIG", config_dir.path().join("config.toml"));
-    cmd
-}
-
-// Helper: whitelist a file path in the given config
-fn whitelist_add(config_dir: &TempDir, path: &str) {
-    ripr(config_dir)
-        .args(["whitelist", "add", path])
-        .assert()
-        .success();
-}
 
 #[test]
 fn test_inclusive_range() {
@@ -47,7 +17,9 @@ fn test_inclusive_range() {
 }
 
 #[test]
-fn test_comma_range() {
+fn test_comma_as_range_separator() {
+    // comma is an alias for dash — both mean inclusive range, not a point-list
+    // "3,5" selects lines 3 through 5 inclusive, same as "3-5"
     let cfg = isolated_config();
     let f = numbered_file(10);
     let path = f.path().to_str().unwrap();
@@ -234,7 +206,8 @@ fn test_denied_file_no_stdout() {
         .assert()
         .failure()
         .code(2)
-        .stdout("");
+        .stdout("")
+        .stderr(predicate::str::contains("access denied"));
 }
 
 #[test]
